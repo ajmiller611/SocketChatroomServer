@@ -9,3 +9,4 @@ endif()
 project ("SocketChatroomServer")
 
 add_subdirectory ("SocketChatroomServer")
+add_subdirectory ("SocketChatroomClient")
