@@ -4,7 +4,7 @@ set(CMAKE_CXX_STANDARD_REQUIRED True)
 set(SOURCES
 	server.cpp
 	server.h
-)
+	main.cpp)
 
 if(WIN32)
 	set(LIBS ${LIBS} ws2_32)

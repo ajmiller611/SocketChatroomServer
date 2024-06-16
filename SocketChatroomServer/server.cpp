@@ -1,9 +1,7 @@
 ﻿#include "server.h"
 
-int main(int argc, char** argv)
+Server::Server()
 {
-    SOCKET serverSocket, acceptSocket;
-    int port = 55555;
     WSADATA wsaData;  // empty WSADATA structure
     WORD wVersionRequested = MAKEWORD(2, 2);
 
@@ -13,14 +11,18 @@ int main(int argc, char** argv)
     if (wsaerr != 0)
     {
         std::cout << "The Winsock dll not found!" << std::endl;
-        return 0;
+        throw std::runtime_error("Winsock dll not found");
     }
     else
     {
         std::cout << "The Winsock dll found!" << std::endl;
         std::cout << "The status: " << wsaData.szSystemStatus << std::endl;
     }
+}
 
+int Server::createServerSocket(int port)
+{
+    SOCKET serverSocket;
     serverSocket = INVALID_SOCKET;
 
     // Creates a socket to be bound to a specific transport service provider.
@@ -32,9 +34,9 @@ int main(int argc, char** argv)
     {
         std::cout << "Error at socket(): " << WSAGetLastError() << std::endl;
         WSACleanup();
-        return 0;
+        throw std::runtime_error("socket() error");
     }
-    else 
+    else
     {
         std::cout << "socket() is OK!" << std::endl;
     }
@@ -49,14 +51,14 @@ int main(int argc, char** argv)
     // serverSocket is the socket descriptor of an unbound socket.
     // service is a pointer to a sockaddr structure that contains the address and port to be bound to the socket.
     // sizeof(service) is the length (in bytes) of the sockaddr structure.
-    if (bind(serverSocket, (SOCKADDR*)&service, sizeof(service)) == SOCKET_ERROR) 
+    if (bind(serverSocket, (SOCKADDR*)&service, sizeof(service)) == SOCKET_ERROR)
     {
         std::cout << "bind() failed: " << WSAGetLastError() << std::endl;
         closesocket(serverSocket);
         WSACleanup();
-        return 0;
+        throw std::runtime_error("bind() error");
     }
-    else 
+    else
     {
         std::cout << "bind() is OK!" << std::endl;
     }
@@ -68,78 +70,58 @@ int main(int argc, char** argv)
     if (listen(serverSocket, 1) == SOCKET_ERROR)
     {
         std::cout << "listen(): Error listening on socket " << WSAGetLastError() << std::endl;
-    }
-    else 
-    {
-        std::cout << "listen() is OK, I'm waiting for connections..." << std::endl;
-    }
-
-    // Attempts to accept an incoming connection.
-    // serverSocket is the socket descriptor of a socket that is in a listening state.
-    // The second parameter is an optional pointer to a sockaddr structure that will contain
-    // the client address information.
-    // The third parameter is length of the sockaddr structure of the second parameter.
-    acceptSocket = accept(serverSocket, NULL, NULL);
-    if (acceptSocket == INVALID_SOCKET)
-    {
-        std::cout << "accept failed: " << WSAGetLastError() << std::endl;
+        closesocket(serverSocket);
         WSACleanup();
-        return -1;
+        throw std::runtime_error("listen(): Error!");
     }
-    std::cout << "Accepted connection" << std::endl;
-
-    char receiveBuffer[2048];
-    while (true)
+    else
     {
-        // Attempt to receive data from the connected socket.
-        // acceptSocket is the socket descriptor of a connected socket.
-        // receiveBuffer is a pointer to the data received.
-        // sizeof(receiveBuffer) is the length (in bytes) of the data received.
-        // Zero is the value to represent the flag to use default behavior.
-        int byteCount = recv(acceptSocket, receiveBuffer, sizeof(receiveBuffer), 0);
-        if (byteCount < 0)
-        {
-            std::cout << "Server receive error: " << WSAGetLastError() << std::endl;
-            WSACleanup();
-            return 0;
-        }
-        else
-        {
-            std::cout << "Received data: " << receiveBuffer << std::endl;
-        }
-
-        char confirmationBuffer[200] = "Message Received";
-
-        // Attempt to send data to the connected socket.
-        // acceptSocket is the socket descriptor of a connected socket.
-        // confirmationBuffer is a pointer to the data to be sent.
-        // sizeof(confirmationBuffer) is the length (in bytes) of the data being sent.
-        // Zero is the value to represent the use of the default flags.
-        byteCount = send(acceptSocket, confirmationBuffer, sizeof(confirmationBuffer), 0);
-        if (byteCount == SOCKET_ERROR)
-        {
-            std::cout << "Server send error: " << WSAGetLastError() << std::endl;
-            WSACleanup();
-            return -1;
-        }
-        else
-        {
-            std::cout << "Automated Message sent to Client." << std::endl;
-        }
+        std::cout << "listen() is OK, Server is waiting for connections..." << std::endl;
     }
-    std::cout << "Server shutting down..." << std::endl;
+
+    return serverSocket;
+}
+
+void Server::respond(int acceptSocket)
+{
+    char receiveBuffer[2048];
+    // Attempt to receive data from the connected socket.
+    // acceptSocket is the socket descriptor of a connected socket.
+    // receiveBuffer is a pointer to the data received.
+    // sizeof(receiveBuffer) is the length (in bytes) of the data received.
+    // Zero is the value to represent the flag to use default behavior.
+    int byteCount = recv(acceptSocket, receiveBuffer, sizeof(receiveBuffer), 0);
+    if (byteCount < 0)
+    {
+        std::cout << "Server receive error: " << WSAGetLastError() << std::endl;
+        WSACleanup();
+        throw std::runtime_error("Server receive error!");
+    }
+    else
+    {
+        std::cout << "Received data: " << receiveBuffer << std::endl;
+    }
+
+    char confirmationBuffer[200] = "Message Received";
+
+    // Attempt to send data to the connected socket.
+    // acceptSocket is the socket descriptor of a connected socket.
+    // confirmationBuffer is a pointer to the data to be sent.
+    // sizeof(confirmationBuffer) is the length (in bytes) of the data being sent.
+    // Zero is the value to represent the use of the default flags.
+    byteCount = send(acceptSocket, confirmationBuffer, sizeof(confirmationBuffer), 0);
+    if (byteCount == SOCKET_ERROR)
+    {
+        std::cout << "Server send error: " << WSAGetLastError() << std::endl;
+        WSACleanup();
+        throw std::runtime_error("Server send error!");
+    }
+    else
+    {
+        std::cout << "Automated Message sent to Client." << std::endl;
+    }
 
     // Close the acceptSocket to free up the system resources used.
     closesocket(acceptSocket);
     std::cout << "Accept socket closed." << std::endl;
-
-    // Close the serverSocket to free up the system resources used.
-    closesocket(serverSocket);
-    std::cout << "Server socket closed." << std::endl;
-
-    // WSACleanup function frees up the system resources used from the calling of the WSAStartup function.
-    WSACleanup();
-    std::cout << "Clean up done. Exiting program." << std::endl;
-
-	return 0;
 }
