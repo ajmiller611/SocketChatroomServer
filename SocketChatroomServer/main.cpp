@@ -1,4 +1,5 @@
 #include "server.h"
+#include <thread>
 
 int main(int argc, char** argv)
 {
@@ -24,7 +25,8 @@ int main(int argc, char** argv)
         }
         std::cout << "Accepted connection" << std::endl;
 
-        server.respond(acceptSocket);
+        std::thread worker(&Server::respond, &server, (int)acceptSocket);
+        worker.detach();
     }
     std::cout << "Server shutting down..." << std::endl;
 
