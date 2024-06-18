@@ -33,18 +33,18 @@ int main(int argc, char** argv)
     close(server_fd);
 
 #elif _WIN32
-    SOCKET serverSocket, acceptSocket;
-    serverSocket = server.createServerSocket(port);
+    SOCKET server_socket, accept_socket;
+    server_socket = server.createServerSocket(port);
 
     while (true)
     {
         // Attempts to accept an incoming connection.
-        // serverSocket is the socket descriptor of a socket that is in a listening state.
+        // server_socket is the socket descriptor of a socket that is in a listening state.
         // The second parameter is an optional pointer to a sockaddr structure that will contain
         // the client address information.
         // The third parameter is length of the sockaddr structure of the second parameter.
-        acceptSocket = accept(serverSocket, NULL, NULL);
-        if (acceptSocket == INVALID_SOCKET)
+        accept_socket = accept(server_socket, NULL, NULL);
+        if (accept_socket == INVALID_SOCKET)
         {
             std::cout << "accept failed: " << WSAGetLastError() << std::endl;
             WSACleanup();
@@ -52,13 +52,13 @@ int main(int argc, char** argv)
         }
         std::cout << "Accepted connection" << std::endl;
 
-        std::thread worker(&Server::respond, &server, (int)acceptSocket);
+        std::thread worker(&Server::respond, &server, (int)accept_socket);
         worker.detach();
     }
     std::cout << "Server shutting down..." << std::endl;
 
-    // Close the serverSocket to free up the system resources used.
-    closesocket(serverSocket);
+    // Close the server_socket to free up the system resources used.
+    closesocket(server_socket);
     std::cout << "Server socket closed." << std::endl;
 
     // WSACleanup function frees up the system resources used from the calling of the WSAStartup function.
