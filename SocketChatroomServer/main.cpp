@@ -4,9 +4,36 @@
 int main(int argc, char** argv)
 {
     Server server;
-
-    SOCKET serverSocket, acceptSocket;
     int port = 55555;
+
+#ifdef __linux__
+    int server_fd = server.createServerSocket(port);
+
+    while (true) {
+        // Set up a sockaddr structure to hold the connected client address.
+        struct sockaddr_in client_addr;
+        int client_addr_len = sizeof(client_addr);
+
+        std::cout << "Waiting for a client to connect...\n";
+
+        // Attempt to accept a connection and returns a new file descriptor of a new socket.
+        // server_fd is the file descriptor of a socket in a listening state.
+        // client_addr is the sockaddr structure with the client address information.
+        // client_addr_len is the size of the sockaddr structure.
+        int client_fd = accept(server_fd, (struct sockaddr*)&client_addr, (socklen_t*)&client_addr_len);
+        if (client_fd < 0) {
+            std::cerr << "Failed to accept connection from client\n";
+            return 1;
+        }
+        std::cout << "Client connected\n";
+
+        std::thread worker(&Server::respond, &server, client_fd);
+        worker.detach();
+    }
+    close(server_fd);
+
+#elif _WIN32
+    SOCKET serverSocket, acceptSocket;
     serverSocket = server.createServerSocket(port);
 
     while (true)
@@ -37,6 +64,8 @@ int main(int argc, char** argv)
     // WSACleanup function frees up the system resources used from the calling of the WSAStartup function.
     WSACleanup();
     std::cout << "Clean up done. Exiting program." << std::endl;
+
+#endif
 
     return 0;
 }
