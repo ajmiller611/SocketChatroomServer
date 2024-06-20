@@ -1,15 +1,42 @@
 #include "client.h"
 
+void receiveMessages(int client_socket)
+{
+	char buffer[2048];
+	while (true)
+	{
+		// Clear the buffer before each use.
+		memset(buffer, '\0', sizeof(buffer));
+
+		// Attempt to receive data from the connected socket.
+		// client_socket is the socket descriptor of a connected socket.
+		// buffer is a pointer to the data received.
+		// sizeof(buffer) is the length (in bytes) of the data received.
+		// Zero is the value to represent the flag to use default behavior.
+		int byte_count = recv(client_socket, buffer, sizeof(buffer), 0);
+		if (byte_count < 0)
+		{
+			std::cout << "Client receive error: " << WSAGetLastError() << std::endl;
+			WSACleanup();
+			throw std::runtime_error("Client receive error!");
+		}
+		else
+		{
+			std::cout << "Message received: " << buffer << std::endl;
+		}
+	}
+}
+
 int main(int argc, char** argv)
 {
-	SOCKET clientSocket;
+	SOCKET client_socket;
 	int port = 55555;
-	WSADATA wsaData;  // empty WSADATA structure
-	WORD wVersionRequested = MAKEWORD(2, 2);
+	WSADATA wsa_data;  // empty WSADATA structure
+	WORD version_requested = MAKEWORD(2, 2);
 
 	// WSAStartup takes a WSADATA structure and populates the structure with the information
 	// needed to implement Windows Sockets. The function returns zero to represent success.
-	int wsaerr = WSAStartup(wVersionRequested, &wsaData);
+	int wsaerr = WSAStartup(version_requested, &wsa_data);
 	if (wsaerr != 0)
 	{
 		std::cout << "The Winsock dll not found!" << std::endl;
@@ -18,17 +45,17 @@ int main(int argc, char** argv)
 	else
 	{
 		std::cout << "The Winsock dll found!" << std::endl;
-		std::cout << "The status: " << wsaData.szSystemStatus << std::endl;
+		std::cout << "The status: " << wsa_data.szSystemStatus << std::endl;
 	}
 
-	clientSocket = INVALID_SOCKET;
+	client_socket = INVALID_SOCKET;
 
 	// Creates a socket to be bound to a specific transport service provider.
 	// AF_INET is the address family specification for Internet Protocol version 4 (IPv4).
 	// SOCK_STREAM is the socket type for Transmission Control Protocol (TCP).
 	// IPPROTO_TCP is the TCP protocol to be used.
-	clientSocket = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
-	if (clientSocket == INVALID_SOCKET)
+	client_socket = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
+	if (client_socket == INVALID_SOCKET)
 	{
 		std::cout << "Error at socket(): " << WSAGetLastError() << std::endl;
 		WSACleanup();
@@ -40,16 +67,16 @@ int main(int argc, char** argv)
 	}
 
 	// Set up the sockaddr structure to contain the address and port of the server.
-	sockaddr_in clientService;
-	clientService.sin_family = AF_INET;
-	InetPton(AF_INET, _T("127.0.0.1"), &clientService.sin_addr.s_addr);
-	clientService.sin_port = htons(port);
+	sockaddr_in client_service;
+	client_service.sin_family = AF_INET;
+	InetPton(AF_INET, _T("127.0.0.1"), &client_service.sin_addr.s_addr);
+	client_service.sin_port = htons(port);
 
 	// Attempt to connect to a specified socket. Also, the connect function takes care of binding the socket.
-	// clientSocket is the socket descriptor of the socket to use, in this case, on the client side of the connection.
-	// clientService is a pointer to a sockaddr structure that contains the address and port of the server socket to connect to.
-	// sizeof(clientService) is the length (in bytes) of the sockaddr structure.
-	if (connect(clientSocket, (SOCKADDR*)&clientService, sizeof(clientService)) == SOCKET_ERROR)
+	// client_socket is the socket descriptor of the socket to use, in this case, on the client side of the connection.
+	// client_service is a pointer to a sockaddr structure that contains the address and port of the server socket to connect to.
+	// sizeof(client_service) is the length (in bytes) of the sockaddr structure.
+	if (connect(client_socket, (SOCKADDR*)&client_service, sizeof(client_service)) == SOCKET_ERROR)
 	{
 		std::cout << "Client: connect() - Failed to connect." << std::endl;
 		WSACleanup();
@@ -61,6 +88,8 @@ int main(int argc, char** argv)
 		std::cout << "Client: Can start sending and receiving data..." << std::endl;
 	}
 
+	std::thread worker(receiveMessages, client_socket);
+
 	char buffer[2048];
 	bool flag = true;
 	while (flag)
@@ -71,12 +100,12 @@ int main(int argc, char** argv)
 		std::cin.getline(buffer, 2048);
 
 		// Attempt to send data to the connected socket.
-		// clientSocket is the socket descriptor of a connected socket.
+		// client_socket is the socket descriptor of a connected socket.
 		// buffer is a pointer to the data to be sent.
 		// sizeof(buffer) is the length (in bytes) of the data being sent.
 		// Zero is the value to represent the use of the default flags. 
-		int byteCount = send(clientSocket, buffer, sizeof(buffer), 0);
-		if (byteCount == SOCKET_ERROR)
+		int byte_count = send(client_socket, buffer, sizeof(buffer), 0);
+		if (byte_count == SOCKET_ERROR)
 		{
 			std::cout << "Client send error: " << WSAGetLastError() << std::endl;
 			WSACleanup();
@@ -84,7 +113,7 @@ int main(int argc, char** argv)
 		}
 		else
 		{
-			std::cout << "Client sent " << byteCount << " bytes." << std::endl;
+			std::cout << "Client sent " << byte_count << " bytes." << std::endl;
 		}
 
 		if (strcmp(buffer, "SHUTDOWN") == 0)
@@ -92,28 +121,11 @@ int main(int argc, char** argv)
 			flag = false;
 			std::cout << "Shutdown code sent to server." << std::endl;
 		}
-
-		// Attempt to receive data from the connected socket.
-		// clientSocket is the socket descriptor of a connected socket.
-		// buffer is a pointer to the data received.
-		// sizeof(buffer) is the length (in bytes) of the data received.
-		// Zero is the value to represent the flag to use default behavior.
-		byteCount = recv(clientSocket, buffer, sizeof(buffer), 0);
-		if (byteCount < 0)
-		{
-			std::cout << "Client receive error: " << WSAGetLastError() << std::endl;
-			WSACleanup();
-			return 0;
-		}
-		else
-		{
-			std::cout << "Message received: " << buffer << std::endl;
-		}
 	}
 	std::cout << "Client shutting down..." << std::endl;
 
 	// Close the socket to free up the system resources used.
-	closesocket(clientSocket);
+	closesocket(client_socket);
 
 	// WSACleanup function frees up the system resources used from the calling of the WSAStartup function.
 	WSACleanup();
