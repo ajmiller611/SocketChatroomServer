@@ -89,6 +89,7 @@ int main(int argc, char** argv)
 	}
 
 	std::thread worker(receiveMessages, client_socket);
+	worker.detach();
 
 	char buffer[2048];
 	bool flag = true;
