@@ -131,6 +131,11 @@ int Server::createServerSocket(int port)
 #endif
 }
 
+void Server::addAcceptedSocket(int socket)
+{
+    m_accepted_connections.push_back(socket);
+}
+
 Server::HttpRequest Server::parseRequest(const std::string& request_str)
 {
     HttpRequest http_request;
@@ -205,45 +210,64 @@ void Server::respond(int client_socket)
     char receive_buffer[2048];
 
 #ifdef __linux__
-    // Attempt to receive data from the connected socket.
-    // client_socket is the file descriptor of a connected socket.
-    // receive_buffer is a pointer to the data received.
-    // sizeof(receive_buffer) is the length (in bytes) of the data received.
-    // Zero is the value to represent the flag to use default behavior.
-    ssize_t byte_count = recv(client_socket, receive_buffer, sizeof(receive_buffer), 0);
-    if (byte_count < 0)
+    while (true)
     {
-        std::cerr << "Failed to receive request" << std::endl;
+        // Attempt to receive data from the connected socket.
+        // client_socket is the file descriptor of a connected socket.
+        // receive_buffer is a pointer to the data received.
+        // sizeof(receive_buffer) is the length (in bytes) of the data received.
+        // Zero is the value to represent the flag to use default behavior.
+        ssize_t byte_count = recv(client_socket, receive_buffer, sizeof(receive_buffer), 0);
+        if (byte_count < 0)
+        {
+            std::cerr << "Failed to receive request" << std::endl;
+        }
+        else if (byte_count == 0)
+        {
+            std::cerr << "Client disconnected" << std::endl;
+            break;
+        }
+
+        std::string buffer(receive_buffer);
+        HttpRequest request = parseRequest(buffer);
+        HttpResponse response;
+
+        if (request.action == "GET") {
+            response = requestGET(request);
+        }
+        else {
+            response.status_line = "HTTP/1.1 404 Not Found";
+        }
+
+        std::string response_message = response.status_line + "\r\n";
+        for (const auto& pair : response.headers)
+        {
+            response_message += pair.first + ": " + pair.second + "\r\n";
+        }
+        response_message += "\r\n" + response.body;
+
+        // Attempt to send data to the connected socket.
+        // client_socket is the file descriptor of a connected socket.
+        // confirmation_buffer is a pointer to the data to be sent.
+        // sizeof(confirmation_buffer) is the length (in bytes) of the data being sent.
+        // Zero is the value to represent the use of the default flags.
+        byte_count = send(client_socket, response_message.c_str(), response_message.size(), 0);
+        if (byte_count < 0)
+        {
+            std::cerr << "Failed to send response to client" << std::endl;
+        }
     }
 
-    std::string buffer(receive_buffer);
-    HttpRequest request = parseRequest(buffer);
-    HttpResponse response;
-
-    if (request.action == "GET") {
-        response = requestGET(request);
-    }
-    else {
-        response.status_line = "HTTP/1.1 404 Not Found";
-    }
-
-    std::string response_message = response.status_line + "\r\n";
-    for (const auto& pair : response.headers)
+    // Remove the closing socket from the active connections vector.
+    size_t index = m_accepted_connections.size();
+    for (size_t i = 0; i < m_accepted_connections.size(); ++i)
     {
-        response_message += pair.first + ": " + pair.second + "\r\n";
-    }
-    response_message += "\r\n" + response.body;
-
-    // Attempt to send data to the connected socket.
-    // client_socket is the file descriptor of a connected socket.
-    // confirmation_buffer is a pointer to the data to be sent.
-    // sizeof(confirmation_buffer) is the length (in bytes) of the data being sent.
-    // Zero is the value to represent the use of the default flags.
-    byte_count = send(client_socket, response_message.c_str(), response_message.size(), 0);
-    if (byte_count < 0)
-    {
-        std::cerr << "Failed to send response to client" << std::endl;
-    }
+        if (m_accepted_connections.at(i) == client_socket)
+        {
+            index = i;
+        }
+}
+    m_accepted_connections.erase(m_accepted_connections.begin() + index);
 
     close(client_socket);
 
@@ -259,9 +283,17 @@ void Server::respond(int client_socket)
         int byte_count = recv(client_socket, receive_buffer, sizeof(receive_buffer), 0);
         if (byte_count < 0)
         {
-            std::cout << "Server receive error: " << WSAGetLastError() << std::endl;
-            WSACleanup();
-            throw std::runtime_error("Server receive error!");
+            if (WSAGetLastError() == WSAECONNRESET)
+            {
+                std::cerr << "Client " << client_socket << " connection lost. Forcibly closed by client." << std::endl;
+                break;
+            }
+            else
+            {
+                std::cout << "Server receive error: " << WSAGetLastError() << std::endl;
+                WSACleanup();
+                throw std::runtime_error("Server receive error!");
+            }
         }
         else
         {
@@ -303,6 +335,17 @@ void Server::respond(int client_socket)
             std::cout << "Response sent to Client" << client_socket << ":\n " << response_message << std::endl;
         }
     }
+
+    // Remove the closing socket from the active connections vector.
+    size_t index = m_accepted_connections.size();
+    for (size_t i = 0; i < m_accepted_connections.size(); ++i)
+    {
+        if (m_accepted_connections.at(i) == client_socket)
+        {
+            index = i;
+        }
+    }
+    m_accepted_connections.erase(m_accepted_connections.begin() + index);
 
     // Close the client_socket to free up the system resources used.
     closesocket(client_socket);

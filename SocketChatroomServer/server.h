@@ -32,9 +32,12 @@ class Server
 		std::string body;
 	};
 
+	std::vector<int> m_accepted_connections;
+
 public:
 	Server();
 	int createServerSocket(int port);
+	void addAcceptedSocket(int socket);
 	HttpRequest parseRequest(const std::string& requestStr);
 	std::string readFile(const std::string& file_path);
 	HttpResponse requestGET(HttpRequest request);

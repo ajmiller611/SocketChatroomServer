@@ -21,11 +21,13 @@ int main(int argc, char** argv)
         // client_addr is the sockaddr structure with the client address information.
         // client_addr_len is the size of the sockaddr structure.
         int client_fd = accept(server_fd, (struct sockaddr*)&client_addr, (socklen_t*)&client_addr_len);
-        if (client_fd < 0) {
+        if (client_fd < 0)
+        {
             std::cerr << "Failed to accept connection from client\n";
             return 1;
         }
         std::cout << "Client connected\n";
+        server.addAcceptedSocket(client_fd);
 
         std::thread worker(&Server::respond, &server, client_fd);
         worker.detach();
@@ -46,11 +48,20 @@ int main(int argc, char** argv)
         accept_socket = accept(server_socket, NULL, NULL);
         if (accept_socket == INVALID_SOCKET)
         {
-            std::cout << "accept failed: " << WSAGetLastError() << std::endl;
-            WSACleanup();
-            return -1;
+            if (WSAGetLastError() == WSAEINTR)
+            {
+                std::cerr << "Interrupted function call." << std::endl;
+                break;
+            }
+            else
+            {
+                std::cout << "accept failed: " << WSAGetLastError() << std::endl;
+                WSACleanup();
+                return -1;
+            }
         }
         std::cout << "Accepted connection" << std::endl;
+        server.addAcceptedSocket(accept_socket);
 
         std::thread worker(&Server::respond, &server, (int)accept_socket);
         worker.detach();
