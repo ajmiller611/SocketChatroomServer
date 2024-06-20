@@ -61,12 +61,14 @@ int main(int argc, char** argv)
 		std::cout << "Client: Can start sending and receiving data..." << std::endl;
 	}
 
-	char buffer[200];
+	char buffer[2048];
 	bool flag = true;
 	while (flag)
 	{
+		// Clear the buffer before each use.
+		memset(buffer, '\0', sizeof(buffer));
 		std::cout << "Enter a message: ";
-		std::cin.getline(buffer, 200);
+		std::cin.getline(buffer, 2048);
 
 		// Attempt to send data to the connected socket.
 		// clientSocket is the socket descriptor of a connected socket.
